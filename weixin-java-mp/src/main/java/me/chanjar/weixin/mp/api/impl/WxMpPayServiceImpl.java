@@ -8,7 +8,6 @@ import me.chanjar.weixin.common.util.xml.XStreamInitializer;
 import me.chanjar.weixin.mp.api.WxMpPayService;
 import me.chanjar.weixin.mp.api.WxMpService;
 import me.chanjar.weixin.mp.bean.pay.WxPayJsSDKCallback;
-import me.chanjar.weixin.mp.bean.pay.result.WxPayOrderCloseResult;
 import me.chanjar.weixin.mp.bean.pay.request.*;
 import me.chanjar.weixin.mp.bean.pay.result.*;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -158,10 +157,10 @@ public class WxMpPayServiceImpl implements WxMpPayService {
    * @param signKey 加密Key(即 商户Key)
    * @return 签名字符串
    */
-  private String createSign(Map<String, String> packageParams, String signKey) {
+  public String createSign(Map<String, String> packageParams, String signKey) {
     SortedMap<String, String> sortedMap = new TreeMap<>(packageParams);
-
     StringBuffer toSign = new StringBuffer();
+    
     for (String key : sortedMap.keySet()) {
       String value = packageParams.get(key);
       if (null != value && !"".equals(value) && !"sign".equals(key)
@@ -398,5 +397,28 @@ public class WxMpPayServiceImpl implements WxMpPayService {
       throw new WxErrorException(WxError.newBuilder().setErrorCode(-1).setErrorMsg(e.getMessage()).build(), e);
     }
   }
+
+  @Override
+  public WxPayRefundQueryResult queryRefund(WxPayRefundQueryRequest request) throws WxErrorException {
+    XStream xstream = XStreamInitializer.getInstance();
+    xstream.processAnnotations(WxPayRefundQueryRequest.class);
+    xstream.processAnnotations(WxPayRefundQueryResult.class);
+    request.setAppid(this.wxMpService.getWxMpConfigStorage().getAppId());
+    request.setMchId(this.wxMpService.getWxMpConfigStorage().getPartnerId());
+    request.setNonceStr(System.currentTimeMillis() + "");
+
+    String sign = this.createSign(BeanUtils.xmlBean2Map(request),
+        this.wxMpService.getWxMpConfigStorage().getPartnerKey());
+    request.setSign(sign);
+
+    String url = PAY_BASE_URL + "/pay/refundquery";
+
+    String responseContent = this.executeRequest(url, xstream.toXML(request));
+    WxPayRefundQueryResult result = (WxPayRefundQueryResult) xstream
+        .fromXML(responseContent);
+    this.checkResult(result);
+    return result;
+  }
+
 
 }
